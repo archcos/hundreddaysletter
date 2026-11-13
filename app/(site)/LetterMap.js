@@ -426,7 +426,7 @@ export default function LetterMap() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Toaster position="top-center" theme={theme === 'night' ? 'dark' : 'light'} richColors closeButton />{/* status pop-ups */}
+      <Toaster position="top-center" theme={theme === 'night' ? 'dark' : 'light'} closeButton />{/* status pop-ups */}
       {hotspotsOpen && (
         <section className="panel card" role="dialog" aria-label="Hotspots">
           <button className="close" onClick={() => setHotspotsOpen(false)} aria-label="Close">×</button>
