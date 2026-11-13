@@ -38,8 +38,8 @@ export default function ReportsTab({ api, onChange, tick, hideAt, onAuthor }) {
               <TableRow key={`${row.kind}-${row.id}`} className={row.reports >= hideAt ? 'bg-destructive/5' : ''}>
                 <TableCell className="max-w-md align-top whitespace-normal">
                   <Badge variant="outline" className="mb-1">{row.kind === 'letters' ? 'Letter' : 'Reply'}</Badge>
-                  <p className="line-clamp-4 whitespace-pre-wrap break-words">{row.body}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">— {row.name || 'anonymous'}</p>
+                  <p dir="auto" className="line-clamp-4 whitespace-pre-wrap break-words">{row.body}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">— <bdi>{row.name || 'anonymous'}</bdi></p>
                 </TableCell>
                 <TableCell className="align-top">
                   <div className="flex flex-wrap gap-1">

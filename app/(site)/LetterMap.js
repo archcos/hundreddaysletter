@@ -15,8 +15,10 @@ import {
 } from '@/components/ui/dialog';
 import { parseCoords, formatCoords } from './coords';
 import { LANDMARKS } from './landmarks';
+import { randomPlace } from './places';
+import { guessLang, langName, pickLang, saveLang } from './translation';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100';
+import { API } from '../api-base';
 const LIFE = 100;
 const THEMES = { paper: '📜 Paper', night: '🌙 Night', clear: '☀️ Clear' };
 const THEME_KEY = 'letters-theme';
@@ -225,12 +227,12 @@ export default function LetterMap() {
       return flyTo(latlng, zoom, options);
     };
 
-    // Stamps sit above the hotspot glows (400) and below envelopes (600). Each stamp is drawn just ABOVE its
-    // spot (see .stamp-inner) and letters/bundles on or below it, so they don't cover each other.
-    map.createPane('stamps').style.zIndex = 450;
+    // Landmark icons sit on top of everything on the map: above the hotspot glows (400) and the letter envelopes and
+    // bundles (600), but below Leaflet's tooltips (650). Each icon is also drawn just ABOVE its spot (see .stamp-inner).
+    map.createPane('stamps').style.zIndex = 640;
     LANDMARKS.forEach(p => L.marker([p.lat, p.lng], {
       pane: 'stamps', keyboard: false, title: p.name,
-      icon: L.divIcon({ className: `stamp tier${p.tier}`, iconSize: null, html: `<div class="stamp-inner"><span>${p.emoji}</span><small>${p.name}</small></div>` }),
+      icon: L.divIcon({ className: `stamp tier${p.tier}`, iconSize: null, html: `<div class="stamp-inner">${p.svg || `<span>${p.emoji}</span>`}<small>${p.name}</small></div>` }),
     }).on('click', () => map.flyTo([p.lat, p.lng], 12)).addTo(map));
 
     haloRef.current = L.layerGroup().addTo(map);
@@ -333,6 +335,16 @@ export default function LetterMap() {
   const readCount = Object.keys(read).length;
   const unread = stats.total === null ? null : Math.max(0, stats.total - readCount);
 
+  // Pick a random place on Earth, fly there, and open the letter box at that spot. Called again from the box's
+  // 🎲 button it re-rolls: the box stays mounted (key "random"), so whatever you've typed is kept.
+  const randomSpot = () => {
+    const p = randomPlace();
+    const at = Object.assign(L.latLng(p.lat, p.lng), { label: p.name, random: true });
+    setOpen(null); setResults([]); setHotspotsOpen(false);
+    mapRef.current.flyTo(at, 9);
+    setDraft(at);
+  };
+
   const flyToPlace = p => {
     closeAll();
     const [s, n, w, e] = p.boundingbox.map(Number);
@@ -404,12 +416,14 @@ export default function LetterMap() {
 
       <nav className="toolbar" aria-label="Map tools">
         <button className="tool card" onClick={randomLetter}>🎲 Random letter</button>
+        <button className="tool card" onClick={randomSpot} title="Pick a random place on Earth to write a letter to">🎯 Random spot</button>
         <button className="tool card" onClick={() => { const v = !hotspotsOpen; closeAll(); setHotspotsOpen(v); }} aria-pressed={hotspotsOpen}>🔥 Hotspots</button>
         <button className="tool card" onClick={nextTheme} aria-label={`Theme: ${theme}. Switch theme`}>{THEMES[theme]}</button>
       </nav>
 
-      {draft && <WriteLetter key={`${draft.lat},${draft.lng}`} at={draft} onSent={onSent} onClose={() => setDraft(null)} />}
-      {open && <ReadLetter key={open.id} letter={open} onClose={() => setOpen(null)} />}
+      {draft && <WriteLetter key={draft.random ? 'random' : `${draft.lat},${draft.lng}`} at={draft} onSent={onSent} onClose={() => setDraft(null)}
+        onReroll={draft.random ? randomSpot : undefined} />}
+      {open && <ReadLetter key={open.id} letter={open} onClose={() => setOpen(null)} canTranslate={!!stats.translate} />}
 
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent>
@@ -458,7 +472,7 @@ async function postJSON(url, payload) {
   return data;
 }
 
-function WriteLetter({ at, onSent, onClose }) {
+function WriteLetter({ at, onSent, onClose, onReroll }) {
   const [body, setBody] = useState('');
   const [name, setName] = useState('');
   const [font, setFont] = useState('hand');
@@ -477,7 +491,12 @@ function WriteLetter({ at, onSent, onClose }) {
   return (
     <section className="panel card" role="dialog" aria-label="Write a letter">
       <button className="close" onClick={onClose} aria-label="Close">×</button>
-      <h2>{nearest(at.lat, at.lng) ? `A letter near ${nearest(at.lat, at.lng).name}` : 'A letter to this place'}</h2>
+      <h2>{at.label ? `A letter to ${at.label}` : nearest(at.lat, at.lng) ? `A letter near ${nearest(at.lat, at.lng).name}` : 'A letter to this place'}</h2>
+      {onReroll && (
+        <button type="button" className="reroll" onClick={onReroll} title="Pick a different random place (keeps what you've written)">
+          🎲 Pick another place
+        </button>
+      )}
       <p className="coords">{formatCoords(at)}</p>
       <form onSubmit={send}>
         <div className="chips" role="radiogroup" aria-label="Font">
@@ -491,7 +510,7 @@ function WriteLetter({ at, onSent, onClose }) {
               className={`swatch paper-${k}`} onClick={() => setPaper(k)} />
           ))}
         </div>
-        <textarea className={sheetClass({ font, paper })} autoFocus value={body} onChange={e => setBody(e.target.value)} maxLength={500}
+        <textarea dir="auto" className={sheetClass({ font, paper })} autoFocus value={body} onChange={e => setBody(e.target.value)} maxLength={500}
           placeholder="Dear…" aria-label="Your letter" />
         <label htmlFor="sig">Sign it (optional)</label>
         <input id="sig" type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="anonymous" />
@@ -523,9 +542,15 @@ function ReportButton({ url }) {
   );
 }
 
-function ReadLetter({ letter, onClose }) {
+function ReadLetter({ letter, onClose, canTranslate }) {
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false); // fallback dialog when the browser blocks copying
+  const [tr, setTr] = useState(null);                // translation of this letter + its replies, once asked for
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [languages, setLanguages] = useState(null);  // what the translation service supports, fetched when first needed
+  const [lang, setLang] = useState(guessLang);       // wanted language: last pick, else the browser's
   const age = Number(letter.age_days);
   const day = Math.min(LIFE, Math.floor(age) + 1);
   const daysLeft = Math.max(0, Math.ceil(LIFE - age));
@@ -539,15 +564,61 @@ function ReadLetter({ letter, onClose }) {
     } catch { setShareOpen(true); }
   };
 
+  const loadLanguages = async () => {
+    if (languages) return languages;
+    const data = await fetch(`${API}/api/translate/languages`).then(r => r.json());
+    setLanguages(data.languages);
+    return data.languages;
+  };
+
+  // Only runs when the reader presses a button. `code` is a language picked in the dialog, else the current choice.
+  const translate = async code => {
+    setTranslating(true);
+    try {
+      const target = code || pickLang(await loadLanguages(), lang);
+      setLang(target); saveLang(target);
+      const res = await postJSON(`${API}/api/letters/${letter.id}/translate`, { lang: target });
+      setTr(res); setShowOriginal(false);
+      const changed = !res.letter.same || Object.values(res.replies).some(x => x && !x.same);
+      if (!changed) toast(`Already in ${langName(target)}`, { description: 'There was nothing to translate.' });
+    } catch (err) { toast.error(errorText(err)); }
+    finally { setTranslating(false); }
+  };
+
+  const openLanguages = async () => {
+    try { await loadLanguages(); setLangOpen(true); } catch (err) { toast.error(errorText(err)); }
+  };
+
+  const translated = tr && !tr.letter.same && !showOriginal;
+  const anyTranslated = tr && (!tr.letter.same || Object.values(tr.replies).some(x => x && !x.same));
+  const from = tr?.letter && !tr.letter.same && tr.letter.from ? langName(tr.letter.from) : '';
+
   return (
     <section className="panel card letter" role="dialog" aria-label="Letter" style={{ '--fade': fadeOf(age) }}>
       <button className="close" onClick={onClose} aria-label="Close">×</button>
       <div className="postmark" aria-label={`Day ${day} of ${LIFE}`}><b>DAY {day}</b><span>of {LIFE}</span></div>
       <p className="coords">{placeName(letter.lat, letter.lng)}<br />{formatCoords(letter)}</p>
       <div className={sheetClass(letter)}>
-        <p className="letter-body">{letter.body}</p>
-        <p className="sign">— {letter.name || 'anonymous'}</p>
+        <p className="letter-body" dir="auto">{translated ? tr.letter.text : letter.body}</p>
+        <p className="sign" dir="auto">— {letter.name || 'anonymous'}</p>
       </div>
+
+      {canTranslate && (
+        <div className="translate-row">
+          {!anyTranslated ? (
+            <button type="button" className="translate-btn" onClick={() => translate()} disabled={translating}>
+              🌐 {translating ? 'Translating…' : `Translate to ${langName(lang)}`}
+            </button>
+          ) : (
+            <>
+              <span className="translate-note">🌐 {showOriginal ? 'Showing the original' : `Translated${from ? ` from ${from}` : ''} to ${langName(tr.lang)}`}</span>
+              <button type="button" className="link" onClick={() => setShowOriginal(v => !v)}>{showOriginal ? 'Show translation' : 'Show original'}</button>
+            </>
+          )}
+          <button type="button" className="link" onClick={openLanguages} disabled={translating}>Other language…</button>
+        </div>
+      )}
+
       <div className="meta">
         <span>Written {ago(age)} · fades in {plural(daysLeft, 'day')}</span>
         <span className="actions">
@@ -555,7 +626,10 @@ function ReadLetter({ letter, onClose }) {
           <ReportButton url={`${API}/api/letters/${letter.id}/report`} />
         </span>
       </div>
-      <Replies letterId={letter.id} />
+      <Replies letterId={letter.id} translations={showOriginal ? null : tr?.replies} />
+
+      <LanguageDialog open={langOpen} onOpenChange={setLangOpen} languages={languages || []} current={lang}
+        onPick={code => { setLangOpen(false); translate(code); }} />
 
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="sm:max-w-md">
@@ -578,7 +652,39 @@ function ReadLetter({ letter, onClose }) {
   );
 }
 
-function Replies({ letterId }) {
+// Every language the translation service offers, searchable by English name, native name or code.
+function LanguageDialog({ open, onOpenChange, languages, current, onPick }) {
+  const [search, setSearch] = useState('');
+  const rows = languages.map(code => ({ code, english: langName(code), native: langName(code, code) }))
+    .sort((a, b) => a.english.localeCompare(b.english));
+  const q = search.trim().toLowerCase();
+  const shown = q ? rows.filter(r => `${r.english} ${r.native} ${r.code}`.toLowerCase().includes(q)) : rows;
+
+  return (
+    <Dialog open={open} onOpenChange={o => { onOpenChange(o); if (!o) setSearch(''); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Translate to…</DialogTitle>
+          <DialogDescription>Pick a language. {languages.length} available.</DialogDescription>
+        </DialogHeader>
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search: Japanese, 日本語, العربية…" aria-label="Search languages"
+          className="h-9 rounded-md border px-3" autoFocus />
+        <ul className="lang-list" aria-label="Languages">
+          {shown.map(r => (
+            <li key={r.code}>
+              <button type="button" className={`lang-chip${r.code.toLowerCase() === String(current).toLowerCase() ? ' on' : ''}`} onClick={() => onPick(r.code)}>
+                <span dir="auto">{r.native}</span>{r.native !== r.english && <small>{r.english}</small>}
+              </button>
+            </li>
+          ))}
+          {!shown.length && <li className="muted">No language matches “{search}”.</li>}
+        </ul>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Replies({ letterId, translations }) {
   const [list, setList] = useState(null);
   const [body, setBody] = useState('');
   const [name, setName] = useState('');
@@ -608,16 +714,19 @@ function Replies({ letterId }) {
       <h3>{list === null ? 'Replies' : n ? `${n} ${n === 1 ? 'reply' : 'replies'}` : 'No replies yet'}</h3>
       {n > 0 && (
         <ul>
-          {list.map(r => (
-            <li key={r.id}>
-              <p>{r.body}</p>
-              <small>— {r.name || 'anonymous'} · {ago(Number(r.age_days))} · <ReportButton url={`${API}/api/replies/${r.id}/report`} /></small>
-            </li>
-          ))}
+          {list.map(r => {
+            const t = translations?.[r.id];
+            return (
+              <li key={r.id}>
+                <p dir="auto">{t && !t.same ? t.text : r.body}</p>
+                <small>— <bdi>{r.name || 'anonymous'}</bdi> · {ago(Number(r.age_days))} · <ReportButton url={`${API}/api/replies/${r.id}/report`} /></small>
+              </li>
+            );
+          })}
         </ul>
       )}
       <form className="reply-form" onSubmit={send}>
-        <textarea value={body} onChange={e => setBody(e.target.value)} maxLength={300} placeholder="Write a reply…" aria-label="Your reply" />
+        <textarea dir="auto" value={body} onChange={e => setBody(e.target.value)} maxLength={300} placeholder="Write a reply…" aria-label="Your reply" />
         {error && <p className="error" role="alert">{error}</p>}
         <div className="row">
           <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="anonymous" aria-label="Sign your reply (optional)" />

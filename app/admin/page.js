@@ -33,7 +33,7 @@ export default function AdminPage() {
 
   const logout = () => { session.set(''); setAuth(null); setOverview(null); };
   const api = useMemo(() => auth && makeApi(auth, logout), [auth]);
-  const loadOverview = () => api('overview').then(setOverview).catch(e => toast.error(e.message));
+  const loadOverview = (quiet = false) => api('overview').then(setOverview).catch(e => { if (!quiet) toast.error(e.message); });
 
   const signIn = async creds => {
     const o = await makeApi(creds)('overview');
@@ -44,6 +44,16 @@ export default function AdminPage() {
     if (!saved) return setChecking(false);
     signIn(saved).catch(() => session.set('')).finally(() => setChecking(false));
   }, []);
+
+  // Refresh by itself every 15 seconds (while this tab is open and visible), and the moment you come back to it,
+  // so new posts show up without pressing Refresh.
+  useEffect(() => {
+    if (!api) return;
+    const refresh = () => { if (document.visibilityState === 'visible') { loadOverview(true); setTick(t => t + 1); } };
+    const timer = setInterval(refresh, 15000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [api]);
 
   if (checking) return null;
   if (!auth) return <Login onSignIn={signIn} />;

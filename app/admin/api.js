@@ -1,6 +1,7 @@
 'use client';
 
-export const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100';
+import { API } from '../api-base';
+export { API };
 
 // Login is kept for this browser tab only (sessionStorage), and cleared on logout or a 401.
 const KEY = 'letters-admin-auth';

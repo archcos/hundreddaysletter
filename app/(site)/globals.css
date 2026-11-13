@@ -52,19 +52,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .leaflet-bar a, .leaflet-control-attribution { background: var(--paper) !important; color: var(--ink) !important; }
 .leaflet-control-attribution a { color: var(--ink-soft); }
 
-/* Landmark postage stamps: drawn just ABOVE their spot (like a sign), so letters and bundles on the
-   spot itself never cover them. */
+/* Landmark icons: just the icon (no box), drawn just ABOVE their spot (like a sign), so letters and bundles on the
+   spot itself never cover them. A soft shadow keeps the icon readable on any map colour. */
 .stamp-inner {
-  --lift: translate(-50%, calc(-100% - 12px));
-  transform: var(--lift) rotate(-4deg); transform-origin: 50% 100%;
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  background: #fffdf6; padding: 4px 6px 3px;
-  border: 1px solid #d8c9a6;
-  box-shadow: 0 0 0 3px #fffdf6, 0 0 0 4px rgba(0, 0, 0, 0.12), 0 3px 8px rgba(0, 0, 0, 0.25);
+  --lift: translate(-50%, calc(-100% - 10px));
+  transform: var(--lift); transform-origin: 50% 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
   cursor: pointer; transition: transform 0.15s;
 }
-.stamp:nth-child(even) .stamp-inner { transform: var(--lift) rotate(5deg); }
-.stamp-inner:hover { transform: var(--lift) scale(1.15); }
+.stamp-inner:hover { transform: var(--lift) scale(1.2); }
+.stamp-inner > span, .stamp-inner > svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+.stamp-inner > svg { width: 30px; height: 34px; display: block; overflow: visible; }
 
 /* Hotspot bundle: a stack of envelopes in the area's most-used paper, with a count. Shown when zoomed out;
    individual envelopes inside hotspots are hidden then (and the other way round when zoomed in). */
@@ -83,10 +81,14 @@ button, input, textarea { font: inherit; color: inherit; }
   border-radius: 999px; background: var(--wax); color: #fff7ea; text-align: center;
   font: 700 11px/18px var(--font-neat), sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
-.stamp-inner span { font-size: 22px; line-height: 1; }
-.stamp-inner small { font: 600 9px/1.1 var(--font-neat), sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #5c4a36; white-space: nowrap; }
-.map[data-zoom="far"] .stamp-inner { padding: 2px 3px; }
-.map[data-zoom="far"] .stamp-inner span { font-size: 16px; }
+.stamp-inner span { font-size: 24px; line-height: 1; }
+/* The name sits on the map with an outline in the theme's paper colour, so it reads on light and dark maps alike. */
+.stamp-inner small {
+  font: 700 9px/1.1 var(--font-neat), sans-serif; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--ink); -webkit-text-stroke: 3px var(--paper); paint-order: stroke fill; margin-top: 1px;
+}
+.map[data-zoom="far"] .stamp-inner span { font-size: 18px; }
+.map[data-zoom="far"] .stamp-inner > svg { width: 22px; height: 25px; }
 .map[data-zoom="far"] .stamp-inner small,
 .map[data-zoom="far"] .stamp.tier2,
 .map[data-zoom="near"] .stamp { display: none; }
@@ -194,6 +196,15 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .panel h2 { margin: 0 0 6px; font-size: 1.05rem; padding-right: 24px; }
 .close { position: absolute; top: 8px; right: 10px; background: none; border: 0; font-size: 1.4rem; line-height: 1; padding: 6px; cursor: pointer; color: var(--ink-soft); z-index: 2; }
+.reroll, .translate-btn {
+  display: inline-block; margin: 0 0 8px; padding: 3px 12px; cursor: pointer;
+  background: var(--field); color: var(--ink); border: 1px solid var(--paper-edge); border-radius: 999px; font-size: 0.82rem;
+}
+.reroll:hover, .translate-btn:hover:not(:disabled) { background: var(--hover); border-color: var(--wax); }
+.translate-btn:disabled { opacity: 0.6; cursor: default; }
+.translate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 10px; font-size: 0.85rem; }
+.translate-row .translate-btn { margin: 0; }
+.translate-note { color: var(--ink-soft); }
 .coords { margin: 0 0 12px; font-size: 0.8rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; line-height: 1.5; }
 .letter .coords { padding-right: 84px; min-height: 52px; }
 .muted { color: var(--ink-soft); }
@@ -213,10 +224,12 @@ label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 12px
 .error { color: var(--wax); font-size: 0.88rem; margin: 10px 0 0; }
 
 /* ---------- Letter paper + fonts ---------- */
-.font-hand { font-family: var(--font-hand), cursive; }
-.font-type { font-family: var(--font-type), 'Courier New', monospace; }
-.font-serif { font-family: var(--font-serif), Georgia, serif; }
-.font-neat { font-family: var(--font-neat), system-ui, sans-serif; }
+/* The letter fonts only cover Latin letters, so Japanese, Chinese, Korean and Arabic fall back to common system fonts
+   (and to the browser's own default for any other script). */
+.font-hand { font-family: var(--font-hand), 'Yu Gothic UI', 'Hiragino Sans', 'Noto Sans CJK JP', 'Malgun Gothic', 'Segoe UI', 'Noto Naskh Arabic', cursive; }
+.font-type { font-family: var(--font-type), 'Courier New', 'Yu Gothic UI', 'Hiragino Sans', 'Noto Sans CJK JP', 'Malgun Gothic', 'Segoe UI', monospace; }
+.font-serif { font-family: var(--font-serif), Georgia, 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Segoe UI', 'Noto Naskh Arabic', serif; }
+.font-neat { font-family: var(--font-neat), 'Yu Gothic UI', 'Hiragino Sans', 'Noto Sans CJK JP', 'Malgun Gothic', 'Segoe UI', 'Noto Sans Arabic', system-ui, sans-serif; }
 
 .paper-cream { --sheet-bg: #fbf5e6; --sheet-line: rgba(120, 90, 50, 0.16); }
 .paper-airmail { --sheet-bg: #eef3fb; --sheet-line: rgba(40, 70, 140, 0.15); }

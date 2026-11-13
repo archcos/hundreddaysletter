@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Archive, ArchiveRestore, Ban, Check, ExternalLink, MoreHorizontal, Undo2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Ban, Check, ExternalLink, Languages, MoreHorizontal, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -21,11 +21,19 @@ const noun = kind => (kind === 'letters' ? 'letter' : 'reply');
 
 // The "…" menu on every letter/reply row. There is no delete: archive hides, restore brings it back.
 export function ItemActions({ kind, row, api, onDone }) {
-  const [dialog, setDialog] = useState(null); // 'archive' | 'ban' | null
+  const [dialog, setDialog] = useState(null); // 'archive' | 'ban' | 'translate' | null
+  const [translation, setTranslation] = useState(null); // { text, from, same, provider } once loaded
   const run = async (promise, message) => {
     try { await promise; toast.success(message); onDone(); } catch (e) { toast.error(e.message); }
   };
   const archived = !!row.archived_at;
+
+  // Moderators read other languages in English; the blocked-word list only understands English.
+  const translate = async () => {
+    setTranslation(null); setDialog('translate');
+    try { setTranslation(await api(`${kind}/${row.id}/translate`, { method: 'POST' })); }
+    catch (e) { toast.error(e.message); setDialog(null); }
+  };
 
   return (
     <>
@@ -49,6 +57,7 @@ export function ItemActions({ kind, row, api, onDone }) {
               <Undo2 /> Dismiss reports
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={translate}><Languages /> Translate to English</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setDialog('ban')}><Ban /> Ban author…</DropdownMenuItem>
           {archived ? (
@@ -79,6 +88,25 @@ export function ItemActions({ kind, row, api, onDone }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={dialog === 'translate'} onOpenChange={o => !o && setDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Translation to English</DialogTitle>
+            <DialogDescription>
+              {translation ? (translation.same ? 'This is already in English.' : `Translated from ${translation.from ? new Intl.DisplayNames(['en'], { type: 'language' }).of(translation.from) : 'another language'} by ${translation.provider}.`) : 'Translating…'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 text-sm">
+            <div><p className="mb-1 text-xs font-medium uppercase text-muted-foreground">Original</p>
+              <blockquote dir="auto" className="max-h-40 overflow-auto rounded-md bg-muted p-3 whitespace-pre-wrap">{row.body}</blockquote></div>
+            {translation && !translation.same && (
+              <div><p className="mb-1 text-xs font-medium uppercase text-muted-foreground">English</p>
+                <blockquote className="max-h-40 overflow-auto rounded-md bg-muted p-3 whitespace-pre-wrap">{translation.text}</blockquote></div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <BanDialog open={dialog === 'ban'} onClose={() => setDialog(null)} author={row.author}
         onBan={({ reason, archiveAll }) => run(

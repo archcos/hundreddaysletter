@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Archive, ArchiveRestore, Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -49,13 +49,24 @@ export default function ContentTab({ kind, api, filter, setFilter, author, setAu
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [sort, setSort] = useState('newest');          // 'newest' | 'attention' (held, flagged and most-reported first)
+  const [fresh, setFresh] = useState(new Set());       // rows that appeared since the last refresh, marked "New"
+  const seen = useRef(null);                           // ids from the previous load; null until the first one
 
   const load = () => {
-    api(`${kind}?${new URLSearchParams({ filter, q: query, author })}`)
-      .then(r => { setRows(r); setSelected(new Set()); })
-      .catch(e => { setRows([]); toast.error(e.message); });
+    api(`${kind}?${new URLSearchParams({ filter, q: query, author, sort })}`)
+      .then(r => {
+        const ids = new Set(r.map(x => x.id));
+        setFresh(seen.current ? new Set([...ids].filter(id => !seen.current.has(id))) : new Set());
+        seen.current = ids;
+        setRows(r);
+        setSelected(s => new Set([...s].filter(id => ids.has(id)))); // keep ticked rows across automatic refreshes
+      })
+      .catch(e => { setRows(rs => rs ?? []); if (rows === null) toast.error(e.message); });
   };
-  useEffect(load, [kind, filter, query, author, tick]);
+  // Changing what is listed starts a fresh comparison, so "New" only marks genuinely new posts.
+  useEffect(() => { seen.current = null; }, [kind, filter, query, author, sort]);
+  useEffect(load, [kind, filter, query, author, sort, tick]);
   const done = () => { load(); onChange(); };
 
   const toggle = id => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -80,7 +91,13 @@ export default function ContentTab({ kind, api, filter, setFilter, author, setAu
             <Button key={k} size="sm" variant={filter === k ? 'default' : 'outline'} aria-pressed={filter === k} onClick={() => setFilter(k)}>{label}</Button>
           ))}
         </div>
-        <form className="ml-auto flex w-full gap-2 sm:w-auto" onSubmit={e => { e.preventDefault(); setQuery(text.trim()); }} role="search">
+        <div className="flex items-center gap-1 sm:ml-auto" role="group" aria-label="Sort order">
+          <span className="mr-1 text-sm text-muted-foreground">Sort:</span>
+          {[['newest', 'Newest first'], ['attention', 'Needs attention first']].map(([k, label]) => (
+            <Button key={k} size="sm" variant={sort === k ? 'secondary' : 'ghost'} aria-pressed={sort === k} onClick={() => setSort(k)}>{label}</Button>
+          ))}
+        </div>
+        <form className="flex w-full gap-2 sm:w-auto" onSubmit={e => { e.preventDefault(); setQuery(text.trim()); }} role="search">
           <Input value={text} onChange={e => setText(e.target.value)} placeholder={`Search ${kind}…`} className="sm:w-64" aria-label={`Search ${kind}`} />
           <Button type="submit" variant="secondary" size="icon" aria-label="Search"><Search /></Button>
         </form>
@@ -108,7 +125,7 @@ export default function ContentTab({ kind, api, filter, setFilter, author, setAu
               <TableHead>{kind === 'letters' ? 'Letter' : 'Reply'}</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Author</TableHead>
-              <TableHead>Age</TableHead>
+              <TableHead>Posted</TableHead>
               <TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
           </TableHeader>
@@ -126,9 +143,11 @@ export default function ContentTab({ kind, api, filter, setFilter, author, setAu
                   <Checkbox checked={selected.has(row.id)} onCheckedChange={() => toggle(row.id)} aria-label="Select row" />
                 </TableCell>
                 <TableCell className="max-w-md align-top whitespace-normal">
-                  <p className="line-clamp-4 whitespace-pre-wrap break-words">{row.body}</p>
+                  <p dir="auto" className="line-clamp-4 whitespace-pre-wrap break-words">
+                    {fresh.has(row.id) && <Badge className="mr-2 align-middle">New</Badge>}{row.body}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    — {row.name || 'anonymous'}
+                    — <bdi>{row.name || 'anonymous'}</bdi>
                     {kind === 'letters'
                       ? <> · {Number(row.lat).toFixed(2)}, {Number(row.lng).toFixed(2)} · {row.font}/{row.paper} · {row.replies} repl{row.replies === 1 ? 'y' : 'ies'}</>
                       : <> · on “{row.letter_body}{row.letter_body?.length >= 80 ? '…' : ''}”</>}
@@ -137,7 +156,7 @@ export default function ContentTab({ kind, api, filter, setFilter, author, setAu
                 <TableCell className="align-top"><StatusBadges row={row} hideAt={hideAt} /></TableCell>
                 <TableCell className="align-top"><AuthorTag author={row.author} onPick={setAuthor} /></TableCell>
                 <TableCell className="align-top text-sm whitespace-nowrap">
-                  {ageText(row.age_days)}
+                  <span title={new Date(row.created_at).toLocaleString()}>{ageText(row.age_days)}</span>
                   {kind === 'letters' && <span className="block text-xs text-muted-foreground">{Math.max(0, Math.ceil(LIFE - Number(row.age_days)))}d left</span>}
                 </TableCell>
                 <TableCell className="align-top"><ItemActions kind={kind} row={row} api={api} onDone={done} /></TableCell>

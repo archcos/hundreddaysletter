@@ -1,4 +1,5 @@
 import { Lora, Caveat, Special_Elite, Nunito } from 'next/font/google';
+import TranslateFix from './TranslateFix';
 
 // Root layout: fonts and <html> only. Styles live in each section's own layout:
 // app/(site)/layout.js for the map, app/admin/layout.js for the shadcn admin panel.
@@ -19,7 +20,10 @@ export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#
 export default function RootLayout({ children }) {
   return (
     <html lang="en" data-theme="paper" className={`${serif.variable} ${hand.variable} ${type.variable} ${neat.variable}`} suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <TranslateFix />
+        {children}
+      </body>
     </html>
   );
 }

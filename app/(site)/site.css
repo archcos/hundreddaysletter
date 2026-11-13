@@ -173,8 +173,8 @@
   color: var(--ink);
   border: 1px solid var(--paper-edge);
   border-radius: 4px;
-  padding: 14px 40px 14px 66px;
-  min-height: 62px;
+  padding: 9px 34px 9px 48px;
+  min-height: 0;
   box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 5px var(--paper-edge), var(--shadow);
   font-family: var(--font-serif), Georgia, serif;
 }
@@ -187,29 +187,41 @@
 [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] { display: none !important; }
 [data-sonner-toaster] [data-sonner-toast]::before {
   content: var(--seal-mark);
-  position: absolute; left: 16px; top: 50%; translate: 0 -50%;
-  width: 38px; height: 38px; border-radius: 50%;
+  position: absolute; left: 12px; top: 50%; translate: 0 -50%;
+  width: 26px; height: 26px; border-radius: 50%;
   display: grid; place-items: center;
-  font: 700 1.1rem/1 var(--font-neat), sans-serif; color: rgba(255, 255, 255, 0.92);
+  font: 700 0.78rem/1 var(--font-neat), sans-serif; color: rgba(255, 255, 255, 0.92);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--seal) 70%, #fff 30%), var(--seal) 55%, color-mix(in srgb, var(--seal) 70%, #000 30%));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--seal) 30%, transparent), 0 2px 5px rgba(0, 0, 0, 0.35), inset 0 0 0 3px rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--seal) 30%, transparent), 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 0 0 2px rgba(255, 255, 255, 0.12);
   rotate: -8deg;
 }
 
 /* Handwritten message, soft detail line. */
 [data-sonner-toaster] [data-sonner-toast] [data-title] {
-  font-family: var(--font-hand), cursive; font-size: 1.4rem; line-height: 1.1; font-weight: 700; color: var(--ink);
+  font-family: var(--font-hand), cursive; font-size: 1.15rem; line-height: 1.1; font-weight: 700; color: var(--ink);
 }
 [data-sonner-toaster] [data-sonner-toast] [data-description] {
-  color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; margin-top: 2px;
+  color: var(--ink-soft); font-size: 0.8rem; line-height: 1.35; margin-top: 1px;
 }
 
 /* The close button sits quietly inside the top-right corner instead of hanging off the edge. */
 [data-sonner-toaster] [data-sonner-toast] [data-close-button] {
-  left: auto !important; right: 8px !important; top: 8px !important; transform: none !important;
-  width: 22px; height: 22px; border: 0; border-radius: 4px;
+  left: auto !important; right: 6px !important; top: 6px !important; transform: none !important;
+  width: 18px; height: 18px; border: 0; border-radius: 4px;
   background: transparent; color: var(--ink-soft);
 }
 [data-sonner-toaster] [data-sonner-toast] [data-close-button]:hover { background: var(--hover); color: var(--ink); }
 [data-sonner-toaster] [data-sonner-toast] [data-button] { background: var(--wax); color: #fff7ea; border-radius: 4px; }
+
+/* ---------- Language picker (Translate to…) ---------- */
+.lang-list { list-style: none; margin: 4px 0 0; padding: 0; max-height: 46vh; overflow: auto; border-top: 1px solid var(--paper-edge); text-align: left; }
+.lang-list li.muted { padding: 14px 4px; color: var(--ink-soft); }
+.lang-chip {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%;
+  padding: 9px 8px; background: none; border: 0; border-bottom: 1px solid var(--paper-edge);
+  color: var(--ink); font: inherit; font-size: 0.95rem; text-align: left; cursor: pointer;
+}
+.lang-chip small { color: var(--ink-soft); font-size: 0.8rem; white-space: nowrap; }
+.lang-chip:hover, .lang-chip:focus-visible { background: var(--hover); outline: none; }
+.lang-chip.on { box-shadow: inset 3px 0 0 var(--wax); font-weight: 700; }
